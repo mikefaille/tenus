@@ -23,6 +23,18 @@ type Bridge struct {
 	slaveIfcs []net.Interface
 }
 
+func IsInterfaceExist(ifcName string) (bool, error) {
+	if ok, err := NetInterfaceNameValid(ifcName); !ok {
+		return false, err
+	}
+
+	if _, err := net.InterfaceByName(ifcName); err != nil {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 // NewBridge creates new network bridge on Linux host.
 //
 // It is equivalent of running: ip link add name br${RANDOM STRING} type bridge
@@ -83,6 +95,33 @@ func NewBridgeWithName(ifcName string) (Bridger, error) {
 			ifc: newIfc,
 		},
 	}, nil
+}
+
+// NewBridge creates new network bridge on Linux host with the name passed as a parameter.
+// It is equivalent of running: ip link add name ${ifcName} type bridge
+// It returns error if the bridge can not be created.
+func DelBridgeWithName(ifcName string) error {
+	if ok, err := NetInterfaceNameValid(ifcName); !ok {
+		return err
+	}
+	ifc, err := net.InterfaceByName(ifcName)
+	if err != nil {
+		return fmt.Errorf("Interface name %s  isn't' assigned on the host", ifcName)
+	}
+
+	if err := netlink.NetworkLinkDown(ifc); err != nil {
+		return err
+	}
+
+	if err := netlink.DeleteBridge(ifcName); err != nil {
+		return err
+	}
+
+	if _, err = net.InterfaceByName(ifcName); err == nil {
+		return fmt.Errorf("Could not delete the old interface: %s", err)
+	}
+
+	return nil
 }
 
 // AddToBridge adds network interfaces to network bridge.
