@@ -2,9 +2,11 @@ package tenus
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/opencontainers/runc/libcontainer/netlink"
 	"github.com/opencontainers/runc/libcontainer/system"
@@ -171,7 +173,22 @@ func (l *Link) SetLinkDown() error {
 // SetLinkIp configures the link's IP address.
 // It is equivalent of running: ip address add ${address}/${mask} dev ${interface name}
 func (l *Link) SetLinkIp(ip net.IP, network *net.IPNet) error {
-	return netlink.NetworkLinkAddIp(l.NetInterface(), ip, network)
+	errToReturn := netlink.NetworkLinkAddIp(l.NetInterface(), ip, network)
+	// Nécéssaire car il semble y avoir un «Race condition»
+	inter, err := net.InterfaceByName(l.NetInterface().Name)
+	if err != nil {
+		log.Fatal(err)
+	}
+	addrs, _ := inter.Addrs()
+	i := 0
+	for len(addrs) == 0 && i <= 10 {
+		addrs, _ = inter.Addrs()
+		fmt.Println("Waiting this interface : ", l.NetInterface().Name)
+		time.Sleep(time.Millisecond * 100)
+		i++
+	}
+
+	return errToReturn
 }
 
 // SetLinkDefaultGw configures the link's default Gateway.
